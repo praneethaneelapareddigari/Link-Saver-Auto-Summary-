@@ -11,6 +11,9 @@ A minimal, production-like Next.js app to save bookmarks with automatic summarie
 
 ## Demo
 Deploy on **Vercel**. Add env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+## 🚀 Live Demo
+[![Live Demo](https://img.shields.io/badge/View-Demo-brightgreen?style=for-the-badge)](https://link-saver-auto-summary-98c3.vercel.app)
+
 
 ## Setup
 
