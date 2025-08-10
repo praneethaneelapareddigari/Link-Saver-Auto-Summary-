@@ -12,7 +12,7 @@ A minimal, production-like Next.js app to save bookmarks with automatic summarie
 ## Demo
 Deploy on **Vercel**. Add env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 ## Live Demo
-https://link-saver-auto-summary-8f9qqgb6u.vercel.app
+https://link-saver-auto-summary-beta.vercel.app
 ## Setup
 
 ```bash
@@ -69,8 +69,6 @@ See `supabase.sql`
 ### Dark Mode
 ![Dark Mode](./screenshots/dark-theme.png)
 
-### Search & Filters
-![Search](./screenshots/Search.png)
 
 
 
