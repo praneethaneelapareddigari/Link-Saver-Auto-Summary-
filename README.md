@@ -52,24 +52,30 @@ See `supabase.sql`
 - Extend easily with tags, dark mode, and Google OAuth.
 
 ## Screenshots
-(Add 2–3 screenshots here after running locally)
-## Screenshots
+(screenshots here after running locally)
 
 ### Login Page
 ![Login](./screenshots/login.png)
 
-### Bookmarks List
-![Bookmarks](./screenshots/bookmarks.png)
-
-### Dark Mode
-![Dark Mode](./screenshots/darktheme.png)
-
-### Overall View
-![Overall](./screenshots/Overall.png)
-
 ### Redirect to Link Saver
 ![Redirect](./screenshots/redirct_link%20Saver.png)
 
+### AI Summary (Light Mode)
+![AI Summary](./screenshots/ai-summary.png)
+
 ### Redirecting to Link
 ![Redirecting](./screenshots/redirecting%20to%20link.png)
+
+### Dark Mode
+![Dark Mode](./screenshots/dark-theme.png)
+
+### Search & Filters
+![Search](./screenshots/Search.png)
+
+### Dark Mode
+![Dark Mode](./screenshots/dark-theme.png)
+
+
+
+
 
