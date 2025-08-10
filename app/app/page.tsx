@@ -22,6 +22,9 @@ export default function AppPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  // per-item "retry summary" loading state
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+
   // 🌙 Dark mode (persisted)
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => {
@@ -66,7 +69,7 @@ export default function AppPage() {
     let query = supabase
       .from("bookmarks")
       .select("*")
-      .eq("user_id", userId) // ✅ scope to current user
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (filterTag) query = query.contains("tags", [filterTag]);
@@ -75,6 +78,7 @@ export default function AppPage() {
     if (!error && data) setList(data as Bookmark[]);
   }
 
+  // ✅ Save even if /api/enrich fails (use defaults)
   async function addBookmark(e: React.FormEvent) {
     e.preventDefault();
     if (!userId || !url.trim()) return;
@@ -99,24 +103,35 @@ export default function AppPage() {
         return;
       }
 
-      // enrich
-      const res = await fetch("/api/enrich", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: clean }),
-      });
-      const { title, favicon, summary, error } = await res.json();
-      if (error) throw new Error(error);
+      // defaults (so we can save even when enrich fails)
+      let title = new URL(clean).hostname;
+      let favicon =
+        `https://www.google.com/s2/favicons?domain=${new URL(clean).hostname}&sz=64`;
+      let summary = "";
 
-      // insert
+      // best-effort enrich — do NOT throw on error
+      try {
+        const res = await fetch("/api/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: clean }),
+        });
+        const json = await res.json();
+        if (json.title) title = json.title;
+        if (json.favicon) favicon = json.favicon || favicon;
+        if (typeof json.summary === "string") summary = json.summary;
+        if (json.error) console.warn("enrich warning:", json.error);
+      } catch (err) {
+        console.warn("enrich failed, saving without summary", err);
+      }
+
+      // insert regardless of summary success
       const { error: insErr } = await supabase.from("bookmarks").insert([
         {
           user_id: userId,
           url: clean,
           title,
-          favicon:
-            favicon ||
-            `https://www.google.com/s2/favicons?domain=${new URL(clean).hostname}&sz=64`,
+          favicon, // ensure your DB column is "favicon" (or rename to match)
           summary,
           tags: tagArray,
         },
@@ -149,6 +164,53 @@ export default function AppPage() {
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  // Retry summary for a specific bookmark
+  async function retrySummary(id: string, url: string) {
+    try {
+      setSummarizingId(id);
+
+      const res = await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          alert("Rate limited by Jina. Please try again later.");
+          return;
+        }
+        alert(`Summary fetch failed (${res.status}). Try again later.`);
+        return;
+      }
+
+      const { summary } = await res.json();
+      if (!summary) {
+        alert("No summary returned. Try again later.");
+        return;
+      }
+
+      const { error: updErr } = await supabase
+        .from("bookmarks")
+        .update({ summary })
+        .eq("id", id);
+
+      if (updErr) {
+        console.error("Summary update failed:", updErr);
+        alert("Fetched summary, but saving to DB was denied (check RLS).");
+        // Show it in UI anyway:
+        setList((prev) => prev.map((b) => (b.id === id ? { ...b, summary } : b)));
+        return;
+      }
+
+      await load(selectedTag ?? null);
+    } catch (err: any) {
+      alert(err.message ?? "Could not refresh summary");
+    } finally {
+      setSummarizingId(null);
+    }
   }
 
   // tag cloud
@@ -293,10 +355,35 @@ export default function AppPage() {
             ) : null}
 
             {b.summary ? (
-              <p className="mt-2 text-sm whitespace-pre-line">{b.summary}</p>
-            ) : null}
+              <>
+                <p className="mt-2 mb-3 text-sm whitespace-pre-line">{b.summary}</p>
+                <button
+                  onClick={() => retrySummary(b.id, b.url)}
+                  className="text-xs underline mb-2"
+                  disabled={summarizingId === b.id}
+                  title="Fetch the latest summary for this page"
+                >
+                  {summarizingId === b.id ? "Refreshing summary…" : "Retry summary"}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 mb-2 text-sm italic opacity-70">
+                  {summarizingId === b.id ? "Summarizing…" : "No summary available."}
+                </p>
+                <button
+                  onClick={() => retrySummary(b.id, b.url)}
+                  className="text-xs underline mb-2"
+                  disabled={summarizingId === b.id}
+                  title="Fetch a summary for this page"
+                >
+                  {summarizingId === b.id ? "Fetching…" : "Generate summary"}
+                </button>
+              </>
+            )}
 
-            <button onClick={() => del(b.id)} className="mt-2 text-xs underline">
+            {/* Bigger, clear gap before Delete */}
+            <button onClick={() => del(b.id)} className="mt-4 block text-xs underline">
               Delete
             </button>
           </li>
@@ -311,3 +398,4 @@ export default function AppPage() {
     </div>
   );
 }
+

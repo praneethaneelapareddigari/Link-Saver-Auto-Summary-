@@ -39,7 +39,7 @@ See `supabase.sql`
 3. We store `{ user_id, url, title, favicon, summary }` in the `bookmarks` table.
 4. Row Level Security ensures users can access only their own rows.
 
-## Time Spent (example)
+## Time Spent
 - Setup & Auth: ~45m
 - CRUD + API route: ~60m
 - UI polish: ~30m
@@ -72,8 +72,6 @@ See `supabase.sql`
 ### Search & Filters
 ![Search](./screenshots/Search.png)
 
-### Dark Mode
-![Dark Mode](./screenshots/dark-theme.png)
 
 
 

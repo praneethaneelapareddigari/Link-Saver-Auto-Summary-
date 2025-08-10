@@ -27,49 +27,39 @@ async function fetchWithTimeout(url: string, ms = 12000, init?: RequestInit) {
   }
 }
 
-/** Robust Jina call with multiple URL styles (appendix first, then fallbacks). */
+/** Appendix-spec call:
+ * GET https://r.jina.ai/http://<URL_ENCODED_TARGET_PAGE>
+ * With debug logs so you can see exactly what’s called.
+ */
 async function getJinaSummary(targetUrl: string) {
-  const u = new URL(targetUrl);
-  const noScheme = `${u.host}${u.pathname}${u.search}`;
   const encoded = encodeURIComponent(targetUrl);
+  const jina = `https://r.jina.ai/http://${encoded}`; // correct pattern per spec
 
-  const tries = [
-    // 1) Assignment appendix (preferred)
-    `https://r.jina.ai/http://${encoded}`,
-    // 2) Encoded after /http/ (some sites reject #1 but accept this)
-    `https://r.jina.ai/http/${encoded}`,
-    // 3) Passthrough scheme style
-    u.protocol === "https:"
-      ? `https://r.jina.ai/https://${noScheme}`
-      : `https://r.jina.ai/http://${noScheme}`,
-    // 4) Raw host+path after /http:// (no encoding)
-    `https://r.jina.ai/http://${noScheme}`,
-  ];
+  // DEBUG: log what we call + status
+  console.log("[enrich] Jina URL:", jina);
 
-  for (const url of tries) {
-    try {
-      console.log("[enrich] TRY:", url);
-      const r = await fetchWithTimeout(url, 12000, {
-        headers: { Accept: "text/plain", "User-Agent": "Mozilla/5.0" },
-      });
-      if (r.status === 429) throw new Error("Rate limited by Jina (429). Try later.");
-      if (!r.ok) {
-        console.log("[enrich] FAIL", r.status);
-        continue;
-      }
-      const text = (await r.text()).trim();
-      console.log("[enrich] OK len:", text.length);
-      if (text) return text.slice(0, 5000);
-    } catch (e) {
-      console.log("[enrich] ERR", (e as Error).message);
-      // try next
-    }
+  let r = await fetchWithTimeout(jina, 12000, { headers: { Accept: "text/plain" } });
+  console.log("[enrich] Jina status:", r.status);
+
+  // tiny retry for 5xx flakiness
+  if (!r.ok && r.status >= 500) {
+    await new Promise((res) => setTimeout(res, 700));
+    r = await fetchWithTimeout(jina, 12000, { headers: { Accept: "text/plain" } });
+    console.log("[enrich] Jina retry status:", r.status);
   }
 
-  return "";
+  if (r.status === 429) throw new Error("Rate limited by Jina (429). Try again later.");
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`Jina ${r.status}: ${body.slice(0, 300)}`);
+  }
+
+  const text = (await r.text()).trim();
+  if (text.length < 40) return ""; // treat tiny responses as empty
+  return text.slice(0, 5000);
 }
 
-// Optional: simple health check
+// Optional: quick health check
 export function GET() {
   return NextResponse.json({ ok: true, route: "/api/enrich" });
 }
@@ -115,11 +105,12 @@ export async function POST(req: NextRequest) {
       // ignore; keep defaults
     }
 
-    // Jina summary (best-effort)
+    // Jina summary (per appendix)
     try {
       const summary = await getJinaSummary(target.toString());
       return NextResponse.json({ title, favicon: faviconAbs, summary });
     } catch (e: any) {
+      // return metadata + helpful error; summary empty so UI shows placeholder
       return NextResponse.json({
         title,
         favicon: faviconAbs,
